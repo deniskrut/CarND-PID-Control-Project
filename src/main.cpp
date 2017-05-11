@@ -33,9 +33,31 @@ int main()
   uWS::Hub h;
 
   PID pid;
-  pid.Init(0.1, 0.0000, 10.);
   
-  h.onMessage([&pid](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
+  // Current twiddle simulation run
+  int twiddle_count = 0;
+  // Total steps for one simulation
+  int twiddle_one_step_count = 10000;
+  // Best error known
+  double best_error = INFINITY;
+  // Index of variable currently being optimized
+  int cur_variable = 0;
+  // Current direction of variable optimization. 1 - up, -1 - down.
+  int cur_direction = 1;
+  // Variables for PID
+  double p_vars[3] = {2.03741, 0., 29.2802};
+  // Delta for variables for PID
+  double dp_vars[3] = {0.00011, 1.93633e-05, 0.0016};
+  // Starter value for twiddle
+  pid.Init(p_vars[0], p_vars[1], p_vars[2]);
+  // Error calculation for Twiddle
+  double twiddle_error = 0;
+  // Throttle value for twiddle
+  double throttle = 0.5;
+  // Indicates if twiddle is enabled
+  bool twiddle_enabled = false;
+  
+  h.onMessage([&](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
@@ -46,25 +68,99 @@ int main()
         auto j = json::parse(s);
         std::string event = j[0].get<std::string>();
         if (event == "telemetry") {
-          // j[1] is the data JSON object
-          double cte = std::stod(j[1]["cte"].get<std::string>());
-          double speed = std::stod(j[1]["speed"].get<std::string>());
-          double angle = std::stod(j[1]["steering_angle"].get<std::string>());
-          double steer_value;
           
-          pid.UpdateError(cte);
+          // If we made less then desired number of steps, continue simulation
+          if (twiddle_count < twiddle_one_step_count || !twiddle_enabled)
+          {
+            // j[1] is the data JSON object
+            double cte = std::stod(j[1]["cte"].get<std::string>());
+            double speed = std::stod(j[1]["speed"].get<std::string>());
+            double angle = std::stod(j[1]["steering_angle"].get<std::string>());
+            double steer_value;
           
-          steer_value = -pid.TotalError();
+            pid.UpdateError(cte);
           
-          // DEBUG
-          std::cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
+            steer_value = -pid.TotalError();
 
-          json msgJson;
-          msgJson["steering_angle"] = steer_value;
-          msgJson["throttle"] = (1. - std::abs(angle)/25) * 0.8 + 0.3;
-          auto msg = "42[\"steer\"," + msgJson.dump() + "]";
-          std::cout << msg << std::endl;
-          ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
+            json msgJson;
+            msgJson["steering_angle"] = steer_value;
+            msgJson["throttle"] = throttle;
+            auto msg = "42[\"steer\"," + msgJson.dump() + "]";
+            ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
+            
+            // Increase twiddle step counter
+            twiddle_count++;
+            // Calculate twiddle error
+            twiddle_error += pow(cte, 2);
+            
+            // If we already know this error is too high
+            if (twiddle_error > best_error)
+            {
+              // Stop this twiddle step
+              twiddle_count = twiddle_one_step_count;
+            }
+          }
+          // This simulation step is over. Start new one.
+          else
+          {
+            // If new error is better then best error
+            if (twiddle_error < best_error)
+            {
+              // Increase delta for current variable
+              dp_vars[cur_variable] *= 1.1;
+              // Make new error the best error
+              best_error = twiddle_error;
+              // Move on to next variable
+              cur_variable = (cur_variable + 1) % 3;
+              // Try addition as a next step
+              cur_direction = 1;
+            }
+            // New error is worse then previous
+            else
+            {
+              // Restore initial values for p
+              p_vars[cur_variable] -= cur_direction * dp_vars[cur_variable];
+              // If we have been adding before
+              if (cur_direction == 1) {
+                // Try substracting now
+                cur_direction = -1;
+              }
+              // If substraction failed
+              else
+              {
+                // Decrease rate of advancement
+                dp_vars[cur_variable] *= 0.9;
+                // Move on to next variable
+                cur_variable = (cur_variable + 1) % 3;
+                // Try addition first
+                cur_direction = 1;
+              }
+            }
+        
+            // Update variables with new settings
+            p_vars[cur_variable] += cur_direction * dp_vars[cur_variable];
+            
+            // Update PID with new variable selection
+            pid.Init(p_vars[0], p_vars[1], p_vars[2]);
+            
+            // Reset the simulator for new twiddle step
+            std::string msg("42[\"reset\", {}]");
+            ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
+            
+            // Reset twiddle step count
+            twiddle_count = 0;
+            
+            // Reset errors for the pid
+            pid.i_error = 0;
+            pid.p_error = 0;
+            pid.d_error = 0;
+            
+            // Reset twiddle error
+            twiddle_error = 0;
+            
+            // Output new PID params
+            std::cout << "Kp:" << p_vars[0] << " Ki:" << p_vars[1] << " Kd:" << p_vars[2] << " Err:" << best_error << std::endl;
+          }
         }
       } else {
         // Manual driving
