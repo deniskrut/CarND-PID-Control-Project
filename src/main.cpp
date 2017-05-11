@@ -45,9 +45,9 @@ int main()
   // Current direction of variable optimization. 1 - up, -1 - down.
   int cur_direction = 1;
   // Variables for PID
-  double p_vars[3] = {2.03741, 0., 29.2802};
+  double p_vars[3] = {0.38816, 3.41136e-05, 8.93412};
   // Delta for variables for PID
-  double dp_vars[3] = {0.00011, 1.93633e-05, 0.0016};
+  double dp_vars[3] = {0.5, 1.93633e-05, 1.};
   // Starter value for twiddle
   pid.Init(p_vars[0], p_vars[1], p_vars[2]);
   // Error calculation for Twiddle
@@ -91,7 +91,7 @@ int main()
             // Increase twiddle step counter
             twiddle_count++;
             // Calculate twiddle error
-            twiddle_error += pow(cte, 2);
+            twiddle_error += std::pow(cte, 8);
             
             // If we already know this error is too high
             if (twiddle_error > best_error)
@@ -140,15 +140,15 @@ int main()
             // Update variables with new settings
             p_vars[cur_variable] += cur_direction * dp_vars[cur_variable];
             
-            // Update PID with new variable selection
-            pid.Init(p_vars[0], p_vars[1], p_vars[2]);
-            
             // Reset the simulator for new twiddle step
             std::string msg("42[\"reset\", {}]");
             ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
             
             // Reset twiddle step count
             twiddle_count = 0;
+            
+            // Update PID with new variable selection
+            pid.Init(p_vars[0], p_vars[1], p_vars[2]);
             
             // Reset errors for the pid
             pid.i_error = 0;
