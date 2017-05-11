@@ -53,7 +53,7 @@ int main()
   // Error calculation for Twiddle
   double twiddle_error = 0;
   // Throttle value for twiddle
-  double throttle = 0.5;
+  double throttle = 0.3;
   // Indicates if twiddle is enabled
   bool twiddle_enabled = false;
   
