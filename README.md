@@ -7,11 +7,11 @@ Self-Driving Car Engineer Nanodegree Program
 
 ### Describe the effect each of the P, I, D components had in your implementation.
 
-`P` component affects how hard the car will steer depending on the CTE. It can be increased if car seem to understeer in the sharp turns. But it also increases chances of car wondering within the lane.
+`P` component affects how hard the car will steer depending on the CTE. It can be increased if car seem to understeer in the sharp turns. But it also increases chances of car wondering within the lane. For the throttle PID controller, `P` parameter determined how fast car should go depending on it's distance from the edge of the road.
 
-`I` component controls systematic understeer. If car is moving to a certain side more then the other, this parameter should correct it.
+`I` component controls systematic understeer. If car is moving to a certain side more then the other, this parameter should correct it. For the throttle PID controller, `I` parameter controls systematic issues of going below or above target speed.
 
-`D` component controls how much to reduce the steering to the center of the lane when we are approaching the center of the lane. This helps to avoid oscillations around the center of the lane.
+`D` component controls how much to reduce the steering to the center of the lane when we are approaching the center of the lane. This helps to avoid oscillations around the center of the lane. For throttle PID controller `D` component determined how should throttle change depending on the rate of change of distance to the edge of the road.
 
 ### Describe how the final hyper-parameters were chosen.
 
@@ -22,6 +22,12 @@ Then I've implemented the twiddle algorithm with a goal to minimize the sum of s
 To mitigate excessive deviation from the center at certain point, I've increased the penalty for such deviation using sum of `CTE` to the power of 8 instead of 2 for the error measure to optimize. That helped, and the car was able to go with higher speeds.
 
 To further improve the parameters, I've altered twiddle algorithm to increase throttle by factor of `1.1` with every successful loop. I've defined loop as successful if there was no excessive deviation from the center of the lane during that loop. That algorithm have reached constant throttle of `0.644204` and have not been able to converge since. Hyper-parameters that worked for lower throttle have been lost.
+
+Next I’ve tried to optimize speed at each section of the track. I’ve started by defining a target speed - value depending on the current CTE. If car is close to the edge of the road, it should slow down to not fall over. When car is below the target speed, it did full acceleration. If car is above target speed - full break. That helped quite a bit, but my targets could not be met initially because there was not enough time to break before the tight turn. Also, when departing from the edge of the road toards the center of the road, car was going slower then it could safely go.
+
+Next I’ve implemented PID controller for throttle. Input was the speed error - difference between target speed and current actual speed. The output was a throttle value. With PID controller car started slowing down as it approached the barrier, and accelerating when it departed from the barrier, which is more optimal behavior.
+
+Later I was trying to make a video with my progress. Screen recording tool degraded performance of my system, and that resulted in car hitting the barriers. If we don’t process enough messages per second, time to make course correction is lost and car goes over the edge. So I made a change allowing to measure time since last message, and use that time to reduce target speed further from the edge of the road. This reduces overall speed on track greatly, but makes successful completion of the track more likely.
 
 If I had more time, I would make the distance of travel the success measure for the twiddle algorithm. I can determine distance by calculating delta of time from pervious to current step, and multiplying that by the speed. Sum of these products will give the distance. Algorithm stops if car leaves the track. Given this measure, I would expect twiddle to arrive at better hyper-parameters.
 
