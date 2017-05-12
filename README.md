@@ -3,10 +3,32 @@ Self-Driving Car Engineer Nanodegree Program
 
 ---
 
+## Reflection
+
+### Describe the effect each of the P, I, D components had in your implementation.
+
+`P` component affects how hard the car will steer depending on the CTE. It can be increased if car seem to understeer in the sharp turns. But it also increases chances of car wondering within the lane.
+
+`I` component controls systematic understeer. If car is moving to a certain side more then the other, this parameter should correct it.
+
+`D` component controls how much to reduce the steering to the center of the lane when we are approaching the center of the lane. This helps to avoid oscillations around the center of the lane.
+
+### Describe how the final hyper-parameters were chosen.
+
+Initially I've tried to choose hyper-parameters manually. For that I looked at understeering, oscillations around the center of the lane and systematic shift. That brought me to the `P = 0.1, I = 0., D = 10.` set. This also allowed me to ride at about 50 miles per hour with constant throttle of `0.45`.
+
+Then I've implemented the twiddle algorithm with a goal to minimize the sum of squares of `CTE`. That brought me following set: `P = 2.03741, I = 0., D = 29.2802`. This set performed less good then the parameters I've chosen manually. While sum of squared errors was smaller with this set of parameters, if I increased the throttle at some points of the track car deviated too much from the center and go off the track.
+
+To mitigate excessive deviation from the center at certain point, I've increased the penalty for such deviation using sum of `CTE` to the power of 8 instead of 2 for the error measure to optimize. That helped, and the car was able to go with higher speeds.
+
+To further improve the parameters, I've altered twiddle algorithm to increase throttle by factor of `1.1` with every successful loop. I've defined loop as successful if there was no excessive deviation from the center of the lane during that loop. That algorithm have reached constant throttle of `0.644204` and have not been able to converge since. Hyper-parameters that worked for lower throttle have been lost.
+
+If I had more time, I would make the distance of travel the success measure for the twiddle algorithm. I can determine distance by calculating delta of time from pervious to current step, and multiplying that by the speed. Sum of these products will give the distance. Algorithm stops if car leaves the track. Given this measure, I would expect twiddle to arrive at better hyper-parameters.
+
 ## Dependencies
 
 * cmake >= 3.5
- * All OSes: [click here for installation instructions](https://cmake.org/install/)
+  * All OSes: [click here for installation instructions](https://cmake.org/install/)
 * make >= 4.1
   * Linux: make is installed by default on most Linux distros
   * Mac: [install Xcode command line tools to get make](https://developer.apple.com/xcode/features/)
