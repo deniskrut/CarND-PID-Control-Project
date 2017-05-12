@@ -37,7 +37,7 @@ int main()
   // Current twiddle simulation run
   int twiddle_count = 0;
   // Total steps for one simulation
-  int twiddle_one_step_count = 10000;
+  int twiddle_one_step_count = 5000;
   // Best error known
   double best_error = INFINITY;
   // Index of variable currently being optimized
