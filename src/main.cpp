@@ -45,7 +45,7 @@ int main()
   // Current direction of variable optimization. 1 - up, -1 - down.
   int cur_direction = 1;
   // Variables for PID
-  double p_vars[3] = {0.38816, 3.41136e-05, 8.93412};
+  double p_vars[3] = {0.1, 0., 10.};
   // Delta for variables for PID
   double dp_vars[3] = {0.5, 1.93633e-05, 1.};
   // Starter value for twiddle
@@ -53,9 +53,17 @@ int main()
   // Error calculation for Twiddle
   double twiddle_error = 0;
   // Throttle value for twiddle
-  double throttle = 0.3;
+  double throttle = 0.484;
   // Indicates if twiddle is enabled
   bool twiddle_enabled = false;
+  // Was the track completed?
+  bool track_completed = true;
+  // PID for throttle
+  PID pid_throttle;
+  // Init PID for throttle
+  pid_throttle.Init(.1, 0., 1.);
+  // Previous step time, needed for more presize speed control
+  std::chrono::high_resolution_clock::time_point last_time;
   
   h.onMessage([&](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
@@ -78,9 +86,29 @@ int main()
             double angle = std::stod(j[1]["steering_angle"].get<std::string>());
             double steer_value;
           
+            // Update error for PID
             pid.UpdateError(cte);
-          
+            // Calculate steering angle
             steer_value = -pid.TotalError();
+            
+            // Calculate tame elapsed since last message
+            auto cur_time = std::chrono::high_resolution_clock::now();
+            double dt = std::chrono::duration_cast<std::chrono::duration<double>>(cur_time - last_time).count();
+            last_time = cur_time;
+            
+            // The more time have elapsed since last update, the more cautious we should be
+            // Therefore we should reduce our speed approaching barriers more agressively
+            double speed_curve_pow = std::max(1., 0.5 + 33 * dt);
+            
+            // Calculate target speed for given CTE
+            double target_speed = std::max(0.65, std::pow(std::max(0., 3.5 - std::abs(cte)) / 3.5, speed_curve_pow)) * 100.;
+            // Speed error is difference between target and actual speed
+            double speed_error = target_speed - speed;
+            // Update throttle error
+            pid_throttle.UpdateError(speed_error);
+            // Calculate throttle
+            throttle = twiddle_enabled ? throttle : pid_throttle.TotalError();
+            std::cout << "Throttle:" << throttle << " Speed error:" << speed_error << " Speed target: " << target_speed << " CTE: " << cte << " dt:" << dt << std::endl;
 
             json msgJson;
             msgJson["steering_angle"] = steer_value;
@@ -98,6 +126,13 @@ int main()
             {
               // Stop this twiddle step
               twiddle_count = twiddle_one_step_count;
+              track_completed = false;
+            }
+            
+            // If cte is more then 3.5, assume that track was not completed
+            if (std::abs(cte) > 3.5)
+            {
+              track_completed = false;
             }
           }
           // This simulation step is over. Start new one.
@@ -114,6 +149,12 @@ int main()
               cur_variable = (cur_variable + 1) % 3;
               // Try addition as a next step
               cur_direction = 1;
+              // If track was completed during this step, increase speed and reset error
+              if (track_completed)
+              {
+                throttle *= 1.1;
+                best_error = INFINITY;
+              }
             }
             // New error is worse then previous
             else
@@ -146,6 +187,9 @@ int main()
             
             // Reset twiddle step count
             twiddle_count = 0;
+            
+            // Reset track completed flag
+            track_completed = true;
             
             // Update PID with new variable selection
             pid.Init(p_vars[0], p_vars[1], p_vars[2]);
@@ -185,8 +229,10 @@ int main()
     }
   });
 
-  h.onConnection([&h](uWS::WebSocket<uWS::SERVER> ws, uWS::HttpRequest req) {
+  h.onConnection([&](uWS::WebSocket<uWS::SERVER> ws, uWS::HttpRequest req) {
     std::cout << "Connected!!!" << std::endl;
+    // Record current time
+    last_time = std::chrono::high_resolution_clock::now();
   });
 
   h.onDisconnection([&h](uWS::WebSocket<uWS::SERVER> ws, int code, char *message, size_t length) {
