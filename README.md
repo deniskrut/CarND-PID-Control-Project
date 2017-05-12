@@ -31,7 +31,7 @@ Later I was trying to make a video with my progress. Screen recording tool degra
 
 If I had more time, I would make the distance of travel the success measure for the twiddle algorithm. I can determine distance by calculating delta of time from pervious to current step, and multiplying that by the speed. Sum of these products will give the distance. Algorithm stops if car leaves the track. Given this measure, I would expect twiddle to arrive at better hyper-parameters.
 
-[Video](https://youtu.be/Wew07ZP1Ros) showing final result is available.
+[Video](https://youtu.be/Ldnlt6bflJI) showing final result is available.
 
 ## Dependencies
 
